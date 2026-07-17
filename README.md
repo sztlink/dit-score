@@ -54,6 +54,31 @@ Quantization hurts low-light scenes, fine texture and product shots. Step reduct
 
 Step time scales near-linearly with token count at these resolutions (4x tokens costs 3.9x time), so the model is GEMM-bound rather than attention-bound here. ComfyUI's `--fast` fp8 matmul path adds only 13 to 15 percent on Ada. Most of the quantization speedup remains unharvested on this hardware, which is the motivation for the W4A4 work below.
 
+## Study 2 . Ampere latency, RTX 3090 (2026-07-17)
+
+Nobody had published quant-format latency for these checkpoints on Ampere. Here it is. Same protocol as the fidelity study, warm median of 3 seeds, ComfyUI on an RTX 3090 (sm86). Raw runs in [`results/2026-07-17-krea2-rtx3090-latency/`](results/2026-07-17-krea2-rtx3090-latency/).
+
+Krea 2 Turbo, seconds per image at 1024x1024:
+
+| variant | 8 steps | 4 steps | 2 steps |
+|---|---|---|---|
+| **int8 convrot** | **8.05** | **4.52** | **2.51** |
+| fp8 scaled | 15.57 | 8.03 | 4.51 |
+| mxfp8 | 17.76 | 9.03 | 5.02 |
+
+The int8 convrot build is not only the most faithful (Study 1), it is also **roughly 2x faster than either fp8 path on Ampere**. On sm86 the INT8 tensor-core route is a real hardware path while the fp8 formats fall back to a slower one, so rotation-based int8 wins both axes at once here. This is the same variant that wins fidelity, which makes it the clear default on Ampere.
+
+### The fused W4A4 path, measured
+
+The tables above are all storage-quantized formats running through ComfyUI's general path. To see what a *fused* W4A4 kernel actually delivers, I benchmarked Nunchaku's INT4 FLUX.1-dev (SVDQuant) on the same RTX 3090. First published Ampere numbers for that runtime. Raw runs in [`results/2026-07-17-nunchaku-flux-rtx3090/`](results/2026-07-17-nunchaku-flux-rtx3090/).
+
+| runtime + model | 1024px, per step |
+|---|---|
+| Nunchaku INT4 FLUX.1-dev (fused W4A4) | **~0.54s** |
+| ComfyUI fp8 Krea 2 Turbo (storage fp8) | ~1.9s |
+
+Both are 12B-class DiTs on the same card, so this is a cross-model indication rather than a controlled same-model A/B (a FLUX fp8/bf16 baseline on this card is still TODO). But the gap is stark: the fused W4A4 path runs roughly **3.5x faster per step** than the fp8-storage path. This is the empirical case for porting Krea 2 to a fused W4A4 runtime rather than settling for storage quantization, which is exactly the [W4A4 work in progress](#roadmap).
+
 ## Run it
 
 ```bash
