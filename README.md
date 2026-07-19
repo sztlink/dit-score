@@ -125,7 +125,7 @@ Both columns run FlashAttention, so the speedup is the four-bit GEMM benefit alo
 
 ### The attention backend was the whole ballgame
 
-The first port ran at 20 seconds for eight steps, four times slower than this. A profile showed the reason. The grouped-query attention was passing `enable_gqa=True` to PyTorch's scaled dot product attention, which silently falls back to the math backend, materializes the full attention matrix, and eats 6 of every 8 seconds. Expanding the 12 key/value heads up to the 48 query heads by hand and calling standard SDPA lets FlashAttention engage. That one change is a 3.8x speedup at 1024px, and it applies to any GQA diffusion transformer running through diffusers, bf16 or quantized.
+The first port ran at 20 seconds for eight steps, four times slower than this. A profile put the blame on attention, six of every eight seconds in the math backend. My first guess was the grouped-query path, and an ablation proved that guess wrong, which is the point of running one. The real cause is dtype. Krea 2's q/k RMSNorm is computed in fp32, and fp32 query and key tensors have no FlashAttention kernel, so scaled dot product attention silently drops to the math backend and materializes the full attention matrix. Casting q and k back to bfloat16 before attention lets FlashAttention engage, a 3.8x speedup at 1024px. The same ablation confirmed the grouped-query flag is fine on the flash backend once the tensors are bf16. The lesson outlives this model. Any attention whose inputs drift to fp32, a routine side effect of keeping norms in fp32, quietly loses FlashAttention, and nothing warns you.
 
 ### Where the rest of the speedup lives
 
