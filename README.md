@@ -114,6 +114,12 @@ Setup. The 28 heavy transformer blocks are quantized (q/k/v/gate fused into one 
 
 **It generates correct images.** Across six prompts the W4A4 output is coherent and detailed, visually indistinguishable in quality from bf16. Mean LPIPS 0.277 against bf16 (0.14 on a clean portrait, 0.33 to 0.36 on fine texture and dense cityscape), which tracks Study 3's fake-quant number of 0.268. The higher-LPIPS prompts shift their composition, they do not lose quality.
 
+![bf16 vs W4A4 fox](samples/foxpair-bf16-w4a4.png)
+*Same seed, same prompt. bf16 left, four-bit W4A4 right. LPIPS 0.14.*
+
+![bf16 vs W4A4 across five prompts](samples/grid-w4a4-fused-runtime.png)
+*bf16 left, W4A4 right, five prompts. Quality holds. The prompts that move most (texture, dense cityscape) shift their composition, they do not degrade.*
+
 | resolution, steps | W4A4 | bf16 | speedup |
 |---|---|---|---|
 | 1024px, 8 steps | 5.38s | 7.51s | 1.40x |
